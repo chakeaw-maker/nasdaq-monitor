@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NASDAQ Stock Monitor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0e17;
+            color: #e0e6f0;
+            min-height: 100vh;
+        }
+
+        header {
+            background: #111827;
+            border-bottom: 1px solid #1e2d45;
+            padding: 16px 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo { font-size: 22px; font-weight: 700; color: #3b82f6; letter-spacing: -0.5px; }
+        .logo span { color: #10b981; }
+        .last-updated { font-size: 12px; color: #6b7280; }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 28px 24px; }
+
+        /* API Setup */
+        .api-setup {
+            background: #111827;
+            border: 1px solid #1e3a5f;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 28px;
+        }
+        .api-setup h3 { color: #3b82f6; margin-bottom: 10px; font-size: 16px; }
+        .api-setup p { color: #9ca3af; font-size: 14px; margin-bottom: 14px; line-height: 1.65; }
+        .api-setup a { color: #3b82f6; }
+        .api-setup .row { display: flex; gap: 10px; }
+        .api-setup input {
+            flex: 1; padding: 11px 14px;
+            background: #0a0e17; border: 1px solid #1e2d45;
+            border-radius: 8px; color: #e0e6f0; font-size: 14px; outline: none;
+        }
+        .api-setup input:focus { border-color: #3b82f6; }
+        .api-setup button {
+            padding: 11px 22px; background: #3b82f6; border: none;
+            border-radius: 8px; color: white; font-size: 14px;
+            font-weight: 600; cursor: pointer;
+        }
+        .api-setup button:hover { background: #2563eb; }
+
+        /* Error */
+        .error-msg {
+            background: #1f1515; border: 1px solid #7f1d1d;
+            color: #fca5a5; padding: 12px 16px;
+            border-radius: 8px; margin-bottom: 20px; font-size: 14px;
+        }
+
+        /* Search */
+        .search-bar { display: flex; gap: 10px; margin-bottom: 24px; }
+        .search-bar input {
+            flex: 1; padding: 13px 16px;
+            background: #111827; border: 1px solid #1e2d45;
+            border-radius: 8px; color: #e0e6f0; font-size: 15px; outline: none;
+        }
+        .search-bar input:focus { border-color: #3b82f6; }
+        .search-bar input::placeholder { color: #4b5563; }
+        .search-bar button {
+            padding: 13px 24px; background: #3b82f6; border: none;
+            border-radius: 8px; color: white; font-size: 15px;
+            font-weight: 600; cursor: pointer;
+        }
+        .search-bar button:hover { background: #2563eb; }
+
+        /* Status */
+        .status-bar { display: flex; align-items: center; font-size: 12px; color: #6b7280; margin-bottom: 20px; }
+        .pulse {
+            display: inline-block; width: 8px; height: 8px;
+            border-radius: 50%; background: #10b981; margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        /* Section title */
+        .section-title {
+            font-size: 13px; font-weight: 600; color: #6b7280;
+            text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px;
+        }
+
+        /* Grid */
+        .stocks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 16px;
+        }
+
+        /* Card */
+        .stock-card {
+            background: #111827; border: 1px solid #1e2d45;
+            border-radius: 12px; padding: 20px;
+            transition: border-color 0.2s, transform 0.15s;
+            position: relative; cursor: default;
+        }
+        .stock-card:hover { border-color: #3b82f6; transform: translateY(-2px); }
+
+        .remove-btn {
+            position: absolute; top: 12px; right: 12px;
+            background: none; border: none; color: #4b5563;
+            cursor: pointer; font-size: 14px; padding: 4px 6px;
+            border-radius: 4px; transition: color 0.2s, background 0.2s;
+        }
+        .remove-btn:hover { color: #ef4444; background: #1f1515; }
+
+        .stock-symbol { font-size: 20px; font-weight: 700; color: #f9fafb; margin-bottom: 4px; }
+        .stock-name { font-size: 12px; color: #6b7280; margin-bottom: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stock-price { font-size: 30px; font-weight: 700; color: #f9fafb; margin-bottom: 8px; }
+
+        .stock-change { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; }
+        .stock-change.up { color: #10b981; }
+        .stock-change.down { color: #ef4444; }
+
+        .stock-meta {
+            margin-top: 16px; padding-top: 16px;
+            border-top: 1px solid #1e2d45;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+        }
+        .meta-item { display: flex; flex-direction: column; }
+        .meta-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+        .meta-value { font-size: 13px; color: #d1d5db; font-weight: 500; margin-top: 3px; }
+
+        .loading-text { color: #4b5563; font-size: 14px; font-style: italic; }
+
+        /* Market closed badge */
+        .market-badge {
+            display: inline-block; font-size: 11px; font-weight: 600;
+            padding: 2px 8px; border-radius: 20px; margin-left: 8px;
+        }
+        .market-open { background: #064e3b; color: #10b981; }
+        .market-closed { background: #1f2937; color: #6b7280; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">NASDAQ <span>Monitor</span></div>
+    <div class="last-updated" id="lastUpdated">—</div>
+</header>
+
+<div class="container">
+
+    <!-- API Key Setup -->
+    <div class="api-setup" id="apiSetup">
+        <h3>🔑 Step 1 — Enter your Free Finnhub API Key</h3>
+        <p>
+            This app uses <strong>Finnhub.io</strong> which is 100% free.<br>
+            Get your key: Go to <a href="https://finnhub.io" target="_blank">finnhub.io</a>
+            → Click <strong>Get free API key</strong> → Sign up → Copy your key from the dashboard.
+        </p>
+        <div class="row">
+            <input type="text" id="apiKeyInput" placeholder="Paste your Finnhub API key here (e.g. d1abc2de3fg...)">
+            <button onclick="saveApiKey()">Save &amp; Connect</button>
+        </div>
+    </div>
+
+    <!-- Error Message -->
+    <div class="error-msg" id="errorMsg" style="display:none"></div>
+
+    <!-- Search Bar -->
+    <div class="search-bar">
+        <input
+            type="text"
+            id="searchInput"
+            placeholder="Add a stock symbol (e.g. AAPL, TSLA, NVDA, AMZN)..."
+            onkeypress="if(event.key==='Enter') addStock()"
+        />
+        <button onclick="addStock()">+ Add Stock</button>
+    </div>
+
+    <!-- Live Status -->
+    <div class="status-bar" id="statusBar" style="display:none">
+        <span class="pulse"></span>
+        <span id="statusText">Updating every 15 seconds</span>
+        <span class="market-badge" id="marketBadge"></span>
+    </div>
+
+    <div class="section-title">My Watchlist</div>
+
+    <!-- Stocks Grid -->
+    <div class="stocks-grid" id="stocksGrid"></div>
+
+</div>
+
+<script>
+    // ── Config ─────────────────────────────────────────────────────────────────
+    const DEFAULT_STOCKS = ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'TSLA', 'META'];
+    const REFRESH_MS = 15000;
+
+    // ── State ──────────────────────────────────────────────────────────────────
+    let apiKey = localStorage.getItem('finnhub_api_key') || '';
+    let watchlist = JSON.parse(localStorage.getItem('watchlist') || JSON.stringify(DEFAULT_STOCKS));
+    let stockData = {};
+    let timer = null;
+
+    // ── Init ───────────────────────────────────────────────────────────────────
+    window.onload = () => {
+        renderSkeletons();
+        if (apiKey) {
+            document.getElementById('apiSetup').style.display = 'none';
+            document.getElementById('statusBar').style.display = 'flex';
+            startRefresh();
+        }
+    };
+
+    // ── Save API Key ───────────────────────────────────────────────────────────
+    function saveApiKey() {
+        const val = document.getElementById('apiKeyInput').value.trim();
+        if (!val) { showError('Please paste your Finnhub API key.'); return; }
+        apiKey = val;
+        localStorage.setItem('finnhub_api_key', val);
+        document.getElementById('apiSetup').style.display = 'none';
+        document.getElementById('statusBar').style.display = 'flex';
+        hideError();
+        startRefresh();
+    }
+
+    // ── Fetch ──────────────────────────────────────────────────────────────────
+    async function fetchQuote(sym) {
+        const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${sym}&token=${apiKey}`);
+        if (r.status === 401 || r.status === 403) throw new Error('INVALID_KEY');
+        const d = await r.json();
+        if (!d || (d.c === 0 && d.h === 0 && d.l === 0)) return null;
+        return d;
+    }
+
+    async function fetchProfile(sym) {
+        const r = await fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${sym}&token=${apiKey}`);
+        return await r.json();
+    }
+
+    function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
+
+    // ── Refresh All ────────────────────────────────────────────────────────────
+    async function refreshAll() {
+        for (const sym of [...watchlist]) {
+            try {
+                const quote = await fetchQuote(sym);
+                if (!quote) continue;
+                if (!stockData[sym]) {
+                    const profile = await fetchProfile(sym);
+                    stockData[sym] = { profile };
+                }
+                stockData[sym].quote = quote;
+                renderCard(sym);
+            } catch (e) {
+                if (e.message === 'INVALID_KEY') {
+                    showError('❌ Invalid API key. Please refresh the page and enter your Finnhub API key again.');
+                    clearInterval(timer);
+                    return;
+                }
+            }
+            await sleep(250);
+        }
+        document.getElementById('lastUpdated').textContent =
+            'Last updated: ' + new Date().toLocaleTimeString();
+        updateMarketStatus();
+        hideError();
+    }
+
+    function startRefresh() {
+        refreshAll();
+        clearInterval(timer);
+        timer = setInterval(refreshAll, REFRESH_MS);
+    }
+
+    // ── Market Status ──────────────────────────────────────────────────────────
+    function updateMarketStatus() {
+        const now = new Date();
+        // US Eastern Time check (UTC-5 or UTC-4)
+        const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        const day = et.getDay();
+        const hour = et.getHours();
+        const min = et.getMinutes();
+        const mins = hour * 60 + min;
+        const isWeekday = day >= 1 && day <= 5;
+        const isOpen = isWeekday && mins >= 570 && mins < 960; // 9:30am - 4:00pm ET
+        const badge = document.getElementById('marketBadge');
+        badge.textContent = isOpen ? 'Market Open' : 'Market Closed';
+        badge.className = 'market-badge ' + (isOpen ? 'market-open' : 'market-closed');
+    }
+
+    // ── Add Stock ──────────────────────────────────────────────────────────────
+    async function addStock() {
+        if (!apiKey) { showError('Please enter your API key first.'); return; }
+        const input = document.getElementById('searchInput');
+        const sym = input.value.trim().toUpperCase();
+        if (!sym) return;
+        if (watchlist.includes(sym)) {
+            showError(`${sym} is already in your watchlist.`);
+            input.value = '';
+            return;
+        }
+        watchlist.push(sym);
+        saveWatchlist();
+        renderSkeleton(sym);
+        input.value = '';
+        try {
+            const quote = await fetchQuote(sym);
+            if (!quote) {
+                showError(`⚠️ Symbol "${sym}" not found. Check the symbol and try again.`);
+                removeStock(sym);
+                return;
+            }
+            const profile = await fetchProfile(sym);
+            stockData[sym] = { quote, profile };
+            renderCard(sym);
+            hideError();
+        } catch (e) {
+            showError(`Could not load data for ${sym}.`);
+            removeStock(sym);
+        }
+    }
+
+    // ── Remove Stock ───────────────────────────────────────────────────────────
+    function removeStock(sym) {
+        watchlist = watchlist.filter(s => s !== sym);
+        delete stockData[sym];
+        saveWatchlist();
+        const el = document.getElementById('card-' + sym);
+        if (el) el.remove();
+    }
+
+    function saveWatchlist() {
+        localStorage.setItem('watchlist', JSON.stringify(watchlist));
+    }
+
+    // ── Render ─────────────────────────────────────────────────────────────────
+    function renderSkeletons() {
+        for (const sym of watchlist) renderSkeleton(sym);
+    }
+
+    function renderSkeleton(sym) {
+        const grid = document.getElementById('stocksGrid');
+        let card = document.getElementById('card-' + sym);
+        if (!card) {
+            card = document.createElement('div');
+            card.className = 'stock-card';
+            card.id = 'card-' + sym;
+            grid.appendChild(card);
+        }
+        card.innerHTML = `
+            <button class="remove-btn" onclick="removeStock('${sym}')">✕</button>
+            <div class="stock-symbol">${sym}</div>
+            <div class="stock-name loading-text">Loading...</div>
+            <div class="stock-price loading-text">—</div>
+        `;
+    }
+
+    function renderCard(sym) {
+        const d = stockData[sym];
+        if (!d || !d.quote) return;
+        const q = d.quote;
+        const p = d.profile || {};
+        const price = q.c.toFixed(2);
+        const diff = (q.c - q.pc).toFixed(2);
+        const pct = (((q.c - q.pc) / q.pc) * 100).toFixed(2);
+        const isUp = parseFloat(diff) >= 0;
+        const grid = document.getElementById('stocksGrid');
+        let card = document.getElementById('card-' + sym);
+        if (!card) {
+            card = document.createElement('div');
+            card.className = 'stock-card';
+            card.id = 'card-' + sym;
+            grid.appendChild(card);
+        }
+        card.innerHTML = `
+            <button class="remove-btn" onclick="removeStock('${sym}')">✕</button>
+            <div class="stock-symbol">${sym}</div>
+            <div class="stock-name">${p.name || 'NASDAQ Stock'}</div>
+            <div class="stock-price">$${price}</div>
+            <div class="stock-change ${isUp ? 'up' : 'down'}">
+                <span>${isUp ? '▲' : '▼'}</span>
+                <span>$${Math.abs(diff)} (${Math.abs(pct)}%)</span>
+            </div>
+            <div class="stock-meta">
+                <div class="meta-item">
+                    <span class="meta-label">High</span>
+                    <span class="meta-value">$${q.h.toFixed(2)}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Low</span>
+                    <span class="meta-value">$${q.l.toFixed(2)}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Open</span>
+                    <span class="meta-value">$${q.o.toFixed(2)}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Prev Close</span>
+                    <span class="meta-value">$${q.pc.toFixed(2)}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    // ── Error Handling ─────────────────────────────────────────────────────────
+    function showError(msg) {
+        const el = document.getElementById('errorMsg');
+        el.textContent = msg;
+        el.style.display = 'block';
+    }
+    function hideError() {
+        document.getElementById('errorMsg').style.display = 'none';
+    }
+</script>
+
+</body>
+</html>
